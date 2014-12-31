@@ -31,6 +31,10 @@ cruisecontrol
     };
 
     var config = {
+        strategy: {
+            type:'fib',     // [Optional] The backoff strategy to use. 'fib' for fibbonacci and 'exp' for expotential
+            options: null   // [Optional] The backoff configuration to use
+        },
         gather: gather,     // Singular method for gathering a batch of items to process
         pipeline: [addOne], // Array of functions to perform row-level work, functions are applied left to right
         summary: [avg],     // [Optional] Array of functions to apply in-order to the aggregated output of the pipeline, functions are applied left to right

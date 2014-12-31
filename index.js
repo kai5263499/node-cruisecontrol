@@ -60,13 +60,30 @@ exports.cruisecontrol = function(config) {
         }
     });
 
+    var queueBackoff;
+    if(config.strategy.type === 'fib') {
+        var fibConfig = {
+            randomisationFactor: 0,
+            initialDelay: 10,
+            maxDelay: 30000
+        };
+        if(!R.isEmpty(config.strategy.config)) {
+            fibConfig = R.mixin(fibConfig,config.strategy.config);
+        }
 
-
-    var queueBackoff = backoff.fibonacci({
-        randomisationFactor: 0,
-        initialDelay: 10,
-        maxDelay: 3000
-    });
+        queueBackoff = backoff.fibonacci(config);
+    } else {
+        var expConfig = {
+            randomisationFactor: 0,
+            initialDelay: 10,
+            maxDelay: 30000,
+            factor: 2
+        };
+        if(!R.isEmpty(config.strategy.config)) {
+            expConfig = R.mixin(expConfig,config.strategy.config);
+        }
+        queueBackoff = backoff.exponential(expConfig);
+    }
 
     queueBackoff.on('ready', function(number, delay) {
         next();
