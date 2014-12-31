@@ -1,6 +1,5 @@
-var Promise = require('bluebird');
-var backoff = Promise.promisifyAll(require('backoff'));
-var monitor = Promise.promisifyAll(require("os-monitor"));
+var backoff = require('backoff');
+var monitor = require("os-monitor");
 var moment  = require('moment');
 var R       = require('ramda');
 
@@ -23,8 +22,8 @@ exports.cruisecontrol = function(config) {
     var summary = null;
     if(config.summary.length > 0) {
         summary = R.pPipe(config.summary[0]);
-        for(var i=1;i<config.summary.length;i++) {
-            summary = R.pPipe(summary,config.summary[i]);
+        for(var s=1;s<config.summary.length;s++) {
+            summary = R.pPipe(summary,config.summary[s]);
         }
     }
 

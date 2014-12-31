@@ -1,11 +1,12 @@
 var assert = require("assert");
 var should = require("should");
 
+// Keep track of the number of times the gather function was run so we can terminate the test
 var run = 0;
 
 // Function that returns some data to process
 var gather = function() {
-    if(run < 10) {
+    if(run < 10) { // Return 10 sets of results
         run++;
         return [1,1,1,1,1,1,1,1,1,1];
     } else {
