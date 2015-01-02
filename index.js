@@ -57,7 +57,7 @@ exports.cruisecontrol = function(config) {
             }
 
             lock = false;
-            if(config.loop === true) {
+            if(config.loop === true && !backedoff) {
                 queueBackoff.backoff();
             }
         } else {
