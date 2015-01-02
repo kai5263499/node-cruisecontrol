@@ -35,9 +35,11 @@ cruisecontrol
             type:'fib',     // [Optional] The backoff strategy to use. 'fib' for fibbonacci and 'exp' for expotential
             options: null   // [Optional] The backoff configuration to use
         },
+        loop: false,        // Whether to continue polling, with backoff, for new records
         gather: gather,     // Singular method for gathering a batch of items to process
-        pipeline: [addOne], // Array of functions to perform row-level work, functions are applied left to right
-        summary: [avg],     // [Optional] Array of functions to apply in-order to the aggregated output of the pipeline, functions are applied left to right
+        pipeline: [addOne], // Array of functions to perform row-level work
+        summary: [avg],     // [Optional] Array of functions to apply in-order to the aggregated output of the pipeline
+        finish: null,       // [Optional] Function to call when gather returns an empty set
         threshold: {
             mem: 0.7,       // Percentage of memory which must be free
             cpu: 2          // Load average in the last 5 minutes that the CPU must be under

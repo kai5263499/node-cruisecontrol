@@ -34,9 +34,11 @@ var config = {
         type:'fib',     // [Optional] The backoff strategy to use. 'fib' for fibbonacci and 'exp' for expotential
         options: null   // [Optional] The backoff configuration to use
     },
+    loop: false,        // Whether to continue polling, with backoff, for new records
     gather: gather,     // Singular method for gathering a batch of items to process
     pipeline: [addOne], // Array of functions to perform row-level work
     summary: [avg],     // [Optional] Array of functions to apply in-order to the aggregated output of the pipeline
+    finish: null,       // [Optional] Function to call when gather returns an empty set
     threshold: {
         mem: 0.7,       // Percentage of memory which must be free
         cpu: 2          // Load average in the last 5 minutes that the CPU must be under
@@ -56,26 +58,35 @@ describe('cruisecontrol instance', function () {
  });
  it('should have api-defined functions', function (done) {
 	(typeof cruisecontrol.start).should.equal('function');
-    (typeof cruisecontrol.pause).should.equal('function');
+    (typeof cruisecontrol.setOverloaded).should.equal('function');
     (typeof cruisecontrol.getOverloaded).should.equal('function');
     (typeof cruisecontrol.getNumRuns).should.equal('function');
     (typeof cruisecontrol.next).should.equal('function');
-    (typeof cruisecontrol.stop).should.equal('function');
+    (typeof cruisecontrol.set).should.equal('function');
+
 	done();
  });
  it('should process some data', function (done) {
+    cruisecontrol.set('finish',function() {
+
+        cruisecontrol.getNumRuns().should.equal(10);
+        done();
+    });
+
+
     cruisecontrol.start();
-    cruisecontrol.getNumRuns().should.equal(10);
-    done();
  });
- it('should backoff when overloaded', function(done) {
-    cruisecontrol.pause();
+ it('should backoff when overloaded', function (done) {
+    cruisecontrol.setOverloaded(-1);
+
+    cruisecontrol.getOverloaded().should.equal(-1);
+
     cruisecontrol.start();
 
-    // Nothing should run while the system is overloaded
-    cruisecontrol.getNumRuns().should.equal(10);
-
-    cruisecontrol.getOverloaded().should.not.equal(null);
-    done();
+    cruisecontrol.set('finish',function() {
+        cruisecontrol.getNumRuns().should.equal(10);
+        (cruisecontrol.getOverloaded() === null).should.be.true;
+        done();
+    });
  });
 });

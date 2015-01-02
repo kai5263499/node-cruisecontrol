@@ -5,14 +5,13 @@ var R       = require('ramda');
 
 exports.cruisecontrol = function(config) {
 
-    var overloaded = null;
-    var numRuns = 0;
-
-    var scope = config.scope;
+    var lock        = false; // Prevent next from running while another next session is running
+    var overloaded  = null;  // Moment of when the system became overloaded. Otherwise null
+    var numRuns     = 0;
 
     // Compose pipeline functions into a single Promisified function
     var pipeline = function(x) { return x; };
-    if(config.pipeline.length > 0) {
+    if(R.isArrayLike(config.pipeline) && !R.isEmpty(config.pipeline)) {
         pipeline = R.pPipe(config.pipeline[0]);
         for(var i=1;i<config.pipeline.length;i++) {
             pipeline = R.pPipe(pipeline,config.pipeline[i]);
@@ -20,12 +19,14 @@ exports.cruisecontrol = function(config) {
     }
 
     var summary = null;
-    if(config.summary.length > 0) {
+    if(R.isArrayLike(config.summary) && !R.isEmpty(config.summary)) {
         summary = R.pPipe(config.summary[0]);
         for(var s=1;s<config.summary.length;s++) {
             summary = R.pPipe(summary,config.summary[s]);
         }
     }
+
+    var set = function(key,val) { config[key] = val; };
 
     var next = function() {
         if(overloaded === null) {
@@ -40,6 +41,12 @@ exports.cruisecontrol = function(config) {
                 }
 
                 next();
+            } else {
+                if(typeof config.finish == 'function') { config.finish(); }
+            }
+
+            if(config.loop === true) {
+                queueBackoff.backoff();
             }
         } else {
             queueBackoff.backoff();
@@ -90,20 +97,26 @@ exports.cruisecontrol = function(config) {
     });
 
     return {
-        pause: function() { overloaded = moment(); },
+        setOverloaded: function(val) { overloaded = val; },
         getOverloaded: function() { return overloaded; },
         getNumRuns:  function() { return numRuns; },
-        next: function() { next(); } ,
-        start: function() {
+        next: next,
+        set: set,
+        start: function(force) {
             monitor.start({
                 delay: ((config.max_delay*1000)/2),
                 immediate: true
             });
 
+            if(force === true) {
+                lock = false;
+            }
+
             next();
         },
         stop: function() {
-            console.log('stopping');
+            monitor.stop();
+            lock = true;
         }
     };
 };
