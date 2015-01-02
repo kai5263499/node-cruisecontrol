@@ -29,6 +29,12 @@ exports.cruisecontrol = function(config) {
     var set = function(key,val) { config[key] = val; };
 
     var next = function() {
+        if(lock === true) {
+            return;
+        } else {
+            lock = true;
+        }
+
         if(overloaded === null) {
             var items = config.gather();
             if(items.length > 0) {
@@ -36,19 +42,22 @@ exports.cruisecontrol = function(config) {
 
                 var transformed = R.map(pipeline, items);
 
-                if(summary) {
+                if(!R.isEmpty(summary) || !R.isEmpty(transformed)) {
                     summary(transformed);
                 }
 
+                lock = false;
                 next();
             } else {
                 if(typeof config.finish == 'function') { config.finish(); }
             }
 
+            lock = false;
             if(config.loop === true) {
                 queueBackoff.backoff();
             }
         } else {
+            lock = false;
             queueBackoff.backoff();
         }
     };
