@@ -68,7 +68,7 @@ exports.cruisecontrol = function(config) {
     });
 
     var queueBackoff;
-    if(config.strategy.type === 'fib') {
+    if(R.isEmpty(config.strategy) || config.strategy.type === 'fib') {
         var fibConfig = {
             randomisationFactor: 0,
             initialDelay: 10,
