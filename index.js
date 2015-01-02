@@ -5,9 +5,11 @@ var R       = require('ramda');
 
 exports.cruisecontrol = function(config) {
 
+    var backedoff   = false;
     var lock        = false; // Prevent next from running while another next session is running
     var overloaded  = null;  // Moment of when the system became overloaded. Otherwise null
     var numRuns     = 0;
+
 
     // Compose pipeline functions into a single Promisified function
     var pipeline = function(x) { return x; };
@@ -29,7 +31,7 @@ exports.cruisecontrol = function(config) {
     var set = function(key,val) { config[key] = val; };
 
     var next = function() {
-        if(lock === true) {
+        if(lock === true || backedoff === true) {
             return;
         } else {
             lock = true;
@@ -42,7 +44,9 @@ exports.cruisecontrol = function(config) {
 
                 var transformed = R.map(pipeline, items);
 
-                if(!R.isEmpty(summary) || !R.isEmpty(transformed)) {
+                if(!R.isEmpty(summary) &&
+                   !R.isEmpty(transformed) &&
+                   typeof summary === 'function') {
                     summary(transformed);
                 }
 
@@ -101,7 +105,12 @@ exports.cruisecontrol = function(config) {
         queueBackoff = backoff.exponential(expConfig);
     }
 
+    queueBackoff.on('backoff', function(number, delay) {
+        backedoff = true;
+    });
+
     queueBackoff.on('ready', function(number, delay) {
+        backedoff = false;
         next();
     });
 
