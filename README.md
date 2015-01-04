@@ -1,7 +1,7 @@
 cruisecontrol
 =========
 
-This is a simple negative feedback closed loop control system. This takes as its input the system's CPU and memory usage load parameters and regulates the frequency of the (gather -> pipeline) operation as a closed loop. The purpose of this module is to ensure smooth(ish) system performance using a backoff strategy to allivieate system load pressure while processing a large amount of data.
+This is a simple [negative feedback closed loop control system](http://en.wikipedia.org/wiki/Negative_feedback "Closed Loop Control System"). This takes as its input the system's CPU and memory usage load parameters and regulates the frequency of the (gather -> pipeline) operation as a closed loop. The purpose of this module is to ensure smooth(ish) system performance using a [backoff strategy](http://en.wikipedia.org/wiki/Exponential_backoff Expotential Backoff) to allivieate system load pressure while processing a large amount of data.
 
 ## Installation
 
