@@ -8,6 +8,8 @@ This is a simple [negative feedback closed loop control system](http://en.wikipe
 	npm install cruisecontrol --save
 
 ## Usage
+    var Cruisecontrol = require('cruisecontrol');
+
     // Function that returns some data to process
     var gather = function() {
         if(run < 10) {
@@ -48,5 +50,5 @@ This is a simple [negative feedback closed loop control system](http://en.wikipe
         }
     };
 
-	var cruisecontrol = new require('cruisecontrol').cruisecontrol(config);
+	var cruisecontrol = new Cruisecontrol(config);
     cruisecontrol.start();

@@ -1,6 +1,6 @@
-var assert = require("assert");
-var should = require("should");
-
+var assert        = require("assert");
+var should        = require("should");
+var Cruisecontrol = new require("../index.js");
 // Keep track of the number of times the gather function was run so we can terminate the test
 var run = 0;
 
@@ -45,18 +45,19 @@ var config = {
     }
 };
 
-var cruisecontrol = new require("../index.js").cruisecontrol(config);
-
 describe('cruisecontrol instance', function () {
  it('should return an object', function (done) {
+    var cruisecontrol = new Cruisecontrol(config);
    (typeof cruisecontrol).should.equal('object');
    done();
  });
  it('should not have an overloaded value', function (done) {
-    (cruisecontrol.getOverloaded() === null).should.be.true;
+    var cruisecontrol = new Cruisecontrol(config);
+    (cruisecontrol.getOverloaded() === null).should.equal(true);
     done();
  });
  it('should have api-defined functions', function (done) {
+    var cruisecontrol = new Cruisecontrol(config);
 	(typeof cruisecontrol.start).should.equal('function');
     (typeof cruisecontrol.setOverloaded).should.equal('function');
     (typeof cruisecontrol.getOverloaded).should.equal('function');
@@ -67,8 +68,8 @@ describe('cruisecontrol instance', function () {
 	done();
  });
  it('should process some data', function (done) {
+    var cruisecontrol = new Cruisecontrol(config);
     cruisecontrol.set('finish',function() {
-
         cruisecontrol.getNumRuns().should.equal(10);
         done();
     });
@@ -77,6 +78,7 @@ describe('cruisecontrol instance', function () {
     cruisecontrol.start();
  });
  it('should backoff when overloaded', function (done) {
+    var cruisecontrol = new Cruisecontrol(config);
     cruisecontrol.setOverloaded(-1);
 
     cruisecontrol.getOverloaded().should.equal(-1);
@@ -84,8 +86,8 @@ describe('cruisecontrol instance', function () {
     cruisecontrol.start();
 
     cruisecontrol.set('finish',function() {
-        cruisecontrol.getNumRuns().should.equal(10);
-        (cruisecontrol.getOverloaded() === null).should.be.true;
+        cruisecontrol.getNumRuns().should.equal(0);
+        (cruisecontrol.getOverloaded() === null).should.equal(true);
         done();
     });
  });

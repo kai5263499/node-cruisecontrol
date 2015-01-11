@@ -3,33 +3,54 @@ var monitor = require("os-monitor");
 var moment  = require('moment');
 var R       = require('ramda');
 
-exports.cruisecontrol = function(config) {
+function Cruisecontrol(config) {
+    monitor.setMaxListeners(20);
 
+    var queueBackoff;
+    var pipeline;
+    var summary     = null;
     var backedoff   = false;
     var lock        = false; // Prevent next from running while another next session is running
     var overloaded  = null;  // Moment of when the system became overloaded. Otherwise null
     var numRuns     = 0;
+    var finish;
 
-
-    // Compose pipeline functions into a single Promisified function
-    var pipeline = function(x) { return x; };
-    if(R.isArrayLike(config.pipeline) && !R.isEmpty(config.pipeline)) {
-        pipeline = R.pPipe(config.pipeline[0]);
-        for(var i=1;i<config.pipeline.length;i++) {
-            pipeline = R.pPipe(pipeline,config.pipeline[i]);
+    var ComposePipeline = function() {
+        // Compose pipeline functions into a single Promisified function
+        if(R.isArrayLike(config.pipeline) && !R.isEmpty(config.pipeline)) {
+            pipeline = R.pPipe(config.pipeline[0]);
+            for(var i=1;i<config.pipeline.length;i++) {
+                pipeline = R.pPipe(pipeline,config.pipeline[i]);
+            }
+        } else {
+            pipeline = this.PASSTHROUGH;
         }
-    }
+    };
 
-    var summary = null;
-    if(R.isArrayLike(config.summary) && !R.isEmpty(config.summary)) {
-        summary = R.pPipe(config.summary[0]);
-        for(var s=1;s<config.summary.length;s++) {
-            summary = R.pPipe(summary,config.summary[s]);
+    var ComposeSummary = function() {
+        if(R.isArrayLike(config.summary) && !R.isEmpty(config.summary)) {
+            summary = R.pPipe(config.summary[0]);
+            for(var s=1;s<config.summary.length;s++) {
+                summary = R.pPipe(summary,config.summary[s]);
+            }
         }
-    }
+    };
 
-    var set = function(key,val) { config[key] = val; };
+    var ComposeFinish = function() {
+        if(typeof config.finish === 'function') {
+            finish = R.pPipe(config.finish,stop);
+        } else {
+            finish = stop;
+        }
+    };
 
+    ComposePipeline();
+    ComposeSummary();
+    ComposeFinish();
+
+    var setOverloaded = function(val) { overloaded = val; };
+    var getOverloaded = function() { return overloaded; };
+    var getNumRuns    = function() { return numRuns; };
     var next = function() {
         if(lock === true || backedoff === true) {
             return;
@@ -53,7 +74,7 @@ exports.cruisecontrol = function(config) {
                 lock = false;
                 next();
             } else {
-                if(typeof config.finish == 'function') { config.finish(); }
+                finish();
             }
 
             lock = false;
@@ -65,10 +86,36 @@ exports.cruisecontrol = function(config) {
             queueBackoff.backoff();
         }
     };
+    var set  = function(key,val) {
+        config[key] = val;
+        if(key === 'pipeline') {
+            ComposePipeline();
+        } else if(key === 'summary') {
+            ComposeSummary();
+        } else if(key === 'finish') {
+            ComposeFinish();
+        }
+    };
+    var start= function(force) {
+            monitor.start({
+                delay: ((config.max_delay*1000)/2),
+                immediate: true
+            });
+
+            if(force === true) {
+                lock = false;
+            }
+
+            next();
+        };
+    var stop = function() {
+            monitor.stop();
+            lock = true;
+        };
 
     // This controls whether the global overloaded state variable
     // is set to none or the moment the system became overloaded.
-    monitor.on('monitor', function(event) {
+    var stateMonitor = function(event) {
         var mem_state = event.freemem/event.totalmem;
         var cpu_state = event.loadavg[0];
 
@@ -78,9 +125,9 @@ exports.cruisecontrol = function(config) {
         } else {
             overloaded = moment();
         }
-    });
+    };
+    monitor.on('monitor', stateMonitor);
 
-    var queueBackoff;
     if(R.isEmpty(config.strategy) || config.strategy.type === 'fib') {
         var fibConfig = {
             randomisationFactor: 0,
@@ -114,27 +161,14 @@ exports.cruisecontrol = function(config) {
         next();
     });
 
-    return {
-        setOverloaded: function(val) { overloaded = val; },
-        getOverloaded: function() { return overloaded; },
-        getNumRuns:  function() { return numRuns; },
-        next: next,
-        set: set,
-        start: function(force) {
-            monitor.start({
-                delay: ((config.max_delay*1000)/2),
-                immediate: true
-            });
+    this.setOverloaded = setOverloaded;
+    this.getOverloaded = getOverloaded;
+    this.getNumRuns    = getNumRuns;
+    this.next          = next;
+    this.start         = start;
+    this.set           = set;
+}
 
-            if(force === true) {
-                lock = false;
-            }
+Cruisecontrol.prototype.PASSTHROUGH = function(x) { return x; };
 
-            next();
-        },
-        stop: function() {
-            monitor.stop();
-            lock = true;
-        }
-    };
-};
+module.exports = Cruisecontrol;
