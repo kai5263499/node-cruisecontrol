@@ -73,13 +73,15 @@ function Cruisecontrol(config) {
 
                 lock = false;
                 next();
-            } else {
-                finish();
             }
 
             lock = false;
-            if(config.loop === true && !backedoff) {
-                queueBackoff.backoff();
+            if(!backedoff) {
+                if(config.loop === true) {
+                    queueBackoff.backoff();
+                } else if(items.length === 0 && typeof finish === 'function') {
+                    finish();
+                }
             }
         } else {
             lock = false;

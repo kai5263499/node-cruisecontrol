@@ -1,5 +1,6 @@
 var assert        = require("assert");
 var should        = require("should");
+var moment        = require('moment');
 var Cruisecontrol = new require("../index.js");
 // Keep track of the number of times the gather function was run so we can terminate the test
 var run = 0;
@@ -74,7 +75,6 @@ describe('cruisecontrol instance', function () {
         done();
     });
 
-
     cruisecontrol.start();
  });
  it('should backoff when overloaded', function (done) {
@@ -83,12 +83,14 @@ describe('cruisecontrol instance', function () {
 
     cruisecontrol.getOverloaded().should.equal(-1);
 
+    var startTime = moment();
     cruisecontrol.start();
 
-    cruisecontrol.set('finish',function() {
+    setTimeout(function() {
         cruisecontrol.getNumRuns().should.equal(0);
-        (cruisecontrol.getOverloaded() === null).should.equal(true);
+        (cruisecontrol.getOverloaded().unix() >= startTime.unix()).should.equal(true);
+        (cruisecontrol.getOverloaded() === null).should.equal(false);
         done();
-    });
+    }, 500);
  });
 });
