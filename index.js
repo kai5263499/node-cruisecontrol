@@ -30,7 +30,13 @@ function Cruisecontrol(config) {
                 pipeline = R.pPipe(pipeline,promisified);
             }
         } else {
-            pipeline = Promise.method(function(x) { return x; });
+            pipeline =  Promise.method(function(x,cb) {
+                            if(typeof cb == 'function') {
+                                cb(x);
+                            } else {
+                                return x;
+                            }
+                        });
         }
     };
 
