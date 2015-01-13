@@ -1,3 +1,4 @@
+var Promise = require('bluebird');
 var backoff = require('backoff');
 var monitor = require("os-monitor");
 var moment  = require('moment');
@@ -15,12 +16,18 @@ function Cruisecontrol(config) {
     var numRuns     = 0;
     var finish;
 
+    var stop = function(cb) {
+            monitor.stop();
+            lock = true;
+        };
+
     var ComposePipeline = function() {
         // Compose pipeline functions into a single Promisified function
         if(R.isArrayLike(config.pipeline) && !R.isEmpty(config.pipeline)) {
-            pipeline = R.pPipe(config.pipeline[0]);
+            pipeline = Promise.method(R.pPipe(config.pipeline[0]));
             for(var i=1;i<config.pipeline.length;i++) {
-                pipeline = R.pPipe(pipeline,config.pipeline[i]);
+                var promisified = Promise.method(config.pipeline[i]);
+                pipeline = R.pPipe(pipeline,promisified);
             }
         } else {
             pipeline = this.PASSTHROUGH;
@@ -29,18 +36,18 @@ function Cruisecontrol(config) {
 
     var ComposeSummary = function() {
         if(R.isArrayLike(config.summary) && !R.isEmpty(config.summary)) {
-            summary = R.pPipe(config.summary[0]);
+            summary = Promise.method(R.pPipe(config.summary[0]));
             for(var s=1;s<config.summary.length;s++) {
-                summary = R.pPipe(summary,config.summary[s]);
+                summary = Promise.method(R.pPipe(summary,config.summary[s]));
             }
         }
     };
 
     var ComposeFinish = function() {
         if(typeof config.finish === 'function') {
-            finish = R.pPipe(config.finish,stop);
+            finish = Promise.method(R.pPipe(config.finish,stop));
         } else {
-            finish = stop;
+            finish = Promise.method(stop);
         }
     };
 
@@ -109,10 +116,6 @@ function Cruisecontrol(config) {
             }
 
             next();
-        };
-    var stop = function() {
-            monitor.stop();
-            lock = true;
         };
 
     // This controls whether the global overloaded state variable

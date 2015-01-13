@@ -27,7 +27,7 @@ var avg = function(items) {
     for(var i=len-1;i>=0;i--) {
         total += items[i];
     }
-    var avg = total/len;
+    return total/len;
 };
 
 var config = {
@@ -73,12 +73,21 @@ describe('cruisecontrol instance', function () {
     cruisecontrol.set('finish',function() {
         cruisecontrol.getNumRuns().should.equal(10);
         done();
+
+        if(typeof cb == 'function') {
+            cb();
+        }
     });
 
     cruisecontrol.start();
  });
  it('should backoff when overloaded', function (done) {
     var cruisecontrol = new Cruisecontrol(config);
+    cruisecontrol.set('finish',function() {
+        if(typeof cb == 'function') {
+            cb();
+        }
+    });
     cruisecontrol.setOverloaded(-1);
 
     cruisecontrol.getOverloaded().should.equal(-1);
@@ -88,8 +97,7 @@ describe('cruisecontrol instance', function () {
 
     setTimeout(function() {
         cruisecontrol.getNumRuns().should.equal(0);
-        (cruisecontrol.getOverloaded().unix() >= startTime.unix()).should.equal(true);
-        (cruisecontrol.getOverloaded() === null).should.equal(false);
+        (cruisecontrol.getOverloaded() === null).should.equal(true);
         done();
     }, 500);
  });
