@@ -30,7 +30,7 @@ function Cruisecontrol(config) {
                 pipeline = R.pPipe(pipeline,promisified);
             }
         } else {
-            pipeline = Promise.method(this.PASSTHROUGH);
+            pipeline = Promise.method(function(x) { return x; });
         }
     };
 
@@ -173,7 +173,5 @@ function Cruisecontrol(config) {
     this.start         = start;
     this.set           = set;
 }
-
-Cruisecontrol.prototype.PASSTHROUGH = function(x) { return x; };
 
 module.exports = Cruisecontrol;
