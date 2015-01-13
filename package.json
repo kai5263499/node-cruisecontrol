@@ -1,6 +1,6 @@
 {
   "name": "cruisecontrol",
-  "version": "1.4.3",
+  "version": "2.0.0",
   "description": "utility for processing a work queue with a backoff triggered by system resources",
   "main": "index.js",
   "scripts": {

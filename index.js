@@ -14,7 +14,16 @@ function Cruisecontrol(config) {
     var lock        = false; // Prevent next from running while another next session is running
     var overloaded  = null;  // Moment of when the system became overloaded. Otherwise null
     var numRuns     = 0;
+    var maxRuns     = R.isEmpty(config.maxRuns) ? -1 : config.maxRuns;
     var finish;
+
+    var PASSTHROUGH = Promise.method(function(x) {
+                                            if(typeof cb == 'function') {
+                                                cb(x);
+                                            } else {
+                                                return x;
+                                            }
+                                        });
 
     var stop = function(cb) {
             monitor.stop();
@@ -23,29 +32,35 @@ function Cruisecontrol(config) {
 
     var ComposePipeline = function() {
         // Compose pipeline functions into a single Promisified function
-        if(R.isArrayLike(config.pipeline) && !R.isEmpty(config.pipeline)) {
-            pipeline = Promise.method(R.pPipe(config.pipeline[0]));
-            for(var i=1;i<config.pipeline.length;i++) {
-                var promisified = Promise.method(config.pipeline[i]);
-                pipeline = R.pPipe(pipeline,promisified);
+        if(!R.isEmpty(config.pipeline)) {
+            if(R.isArrayLike(config.pipeline)) {
+                pipeline = Promise.method(R.pPipe(config.pipeline[0]));
+                for(var i=1;i<config.pipeline.length;i++) {
+                    var promisified = Promise.method(config.pipeline[i]);
+                    pipeline = R.pPipe(pipeline,promisified);
+                }
+            } else if(typeof config.pipeline === 'function') {
+                pipeline = Promise.method(config.pipeline);
+            } else {
+                pipeline = PASSTHROUGH;
             }
         } else {
-            pipeline =  Promise.method(function(x,cb) {
-                            if(typeof cb == 'function') {
-                                cb(x);
-                            } else {
-                                return x;
-                            }
-                        });
+            pipeline = PASSTHROUGH;
         }
     };
 
     var ComposeSummary = function() {
-        if(R.isArrayLike(config.summary) && !R.isEmpty(config.summary)) {
-            summary = Promise.method(R.pPipe(config.summary[0]));
-            for(var s=1;s<config.summary.length;s++) {
-                summary = Promise.method(R.pPipe(summary,config.summary[s]));
+        if(config.summary !== null) {
+            if(R.isArrayLike(config.summary)) {
+                summary = Promise.method(R.pPipe(config.summary[0]));
+                for(var s=1;s<config.summary.length;s++) {
+                    summary = Promise.method(R.pPipe(summary,config.summary[s]));
+                }
+            } else if(typeof summary === 'function') {
+                summary = Promise.method(config.summary);
             }
+        } else {
+            summary = null;
         }
     };
 
@@ -61,7 +76,9 @@ function Cruisecontrol(config) {
     ComposeSummary();
     ComposeFinish();
 
-    var setOverloaded = function(val) { overloaded = val; };
+    var setOverloaded = function(val) {
+        overloaded = val;
+    };
     var getOverloaded = function() { return overloaded; };
     var getNumRuns    = function() { return numRuns; };
     var next = function() {
@@ -72,33 +89,51 @@ function Cruisecontrol(config) {
         }
 
         if(overloaded === null) {
-            var items = config.gather();
-            if(items.length > 0) {
-                numRuns++;
-
-                var transformed = R.map(pipeline, items);
-
-                if(!R.isEmpty(summary) &&
-                   !R.isEmpty(transformed) &&
-                   typeof summary === 'function') {
-                    summary(transformed);
-                }
-
-                lock = false;
-                next();
-            }
-
-            lock = false;
-            if(!backedoff) {
-                if(config.loop === true) {
-                    queueBackoff.backoff();
-                } else if(items.length === 0 && typeof finish === 'function') {
-                    finish();
-                }
+            var res = config.gather();
+            if(typeof res.then === 'function') {
+                res.then(processItems);
+            } else if(R.isArrayLike(res)) {
+                processItems(res);
             }
         } else {
             lock = false;
             queueBackoff.backoff();
+        }
+    };
+    var processItems = function(items) {
+        if(items.length > 0) {
+            numRuns++;
+
+            Promise.all(R.map(pipeline, items))
+                .then(function(transformed) {
+                    if(summary !== null &&
+                       !R.isEmpty(transformed) &&
+                       typeof summary === 'function') {
+                        summary(transformed)
+                            .then(postProcessItems);
+                    } else {
+                        postProcessItems(items);
+                    }
+                });
+        } else {
+            lock = false;
+            if(!backedoff) {
+                if(config.loop === true) {
+                    queueBackoff.backoff();
+                } else if(typeof finish === 'function') {
+                    finish();
+                }
+            }
+        }
+    };
+    var postProcessItems = function(summaryItems) {
+        var maxRunsExceeded = (maxRuns !== -1 && numRuns >= maxRuns);
+        if((summaryItems.length === 0 || maxRunsExceeded) &&
+            typeof finish === 'function') {
+            finish(summaryItems);
+        } else {
+            lock = false;
+            next();
         }
     };
     var set  = function(key,val) {
