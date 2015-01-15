@@ -52,3 +52,55 @@ This is a simple [negative feedback closed loop control system](http://en.wikipe
 
 	var cruisecontrol = new Cruisecontrol(config);
     cruisecontrol.start();
+
+## Config options
+
+<table>
+    <tr>
+        <td>Property</td>
+        <td>Required</td>
+        <td>Purpose</td>
+    </tr>
+    <tr>
+        <td>strategy</td>
+        <td>no</td>
+        <td>The backoff strategy to use. Defaults to a fibbonacci backoff strategy</td>
+    </tr>
+    <tr>
+        <td>loop</td>
+        <td>no</td>
+        <td>Instructs cruisecontrol to continue looping on the gather method even if it returns no rows. This is useful for continuously monitoring a queue which may sometimes be empty.</td>
+    </tr>
+    <tr>
+        <td>gather</td>
+        <td>yes</td>
+        <td>A method which may or may not return a promise which then returns an array of items to pass along to the pipeline method(s).</td>
+    </tr>
+    <tr>
+        <td>pipeline</td>
+        <td>no</td>
+        <td>Method or array of methods which may or may not return a promise to run. These methods are combined together and passed one item from the gather method which can then be mutated through the pipeline. If pipeline is omitted, a 'passthrough' method is supplied instead.</td>
+    </tr>
+    <tr>
+        <td>summary</td>
+        <td>no</td>
+        <td>Method or array of methods which may or may not return a promise to run. The result is then passed all of the items emmited from the pipeline.</td>
+    </tr>
+    <tr>
+        <td>finish</td>
+        <td>no</td>
+        <td>Method or array of methods which may or may not return a promise to run. These methods are combined together and passed all of the items that were passed along to the pipeline.</td>
+    </tr>
+    <tr>
+        <td>threshold</td>
+        <td>yes</td>
+        <td>Parameters of when to switch the cruisecontrol system into an 'overloaded' state. When overloaded, the system employs the backoff strategy set above to schedule the next retry of the gather method. As long as the system is overloaded no new data will be processed.</td>
+    </tr>
+    <tr>
+        <td>maxRuns</td>
+        <td>no</td>
+        <td>A hard limit on the number of calls to the gather method to make.</td>
+    </tr>
+</table>
+
+ 

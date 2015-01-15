@@ -56,7 +56,7 @@ function Cruisecontrol(config) {
                 for(var s=1;s<config.summary.length;s++) {
                     summary = Promise.method(R.pPipe(summary,config.summary[s]));
                 }
-            } else if(typeof summary === 'function') {
+            } else {
                 summary = Promise.method(config.summary);
             }
         } else {
@@ -107,8 +107,7 @@ function Cruisecontrol(config) {
             Promise.all(R.map(pipeline, items))
                 .then(function(transformed) {
                     if(summary !== null &&
-                       !R.isEmpty(transformed) &&
-                       typeof summary === 'function') {
+                       !R.isEmpty(transformed)) {
                         summary(transformed)
                             .then(postProcessItems);
                     } else {
@@ -120,7 +119,7 @@ function Cruisecontrol(config) {
             if(!backedoff) {
                 if(config.loop === true) {
                     queueBackoff.backoff();
-                } else if(typeof finish === 'function') {
+                } else {
                     finish();
                 }
             }
@@ -128,7 +127,7 @@ function Cruisecontrol(config) {
     };
     var postProcessItems = function(summaryItems) {
         var maxRunsExceeded = (maxRuns !== -1 && numRuns >= maxRuns);
-        if((summaryItems.length === 0 || maxRunsExceeded) &&
+        if(((R.isArrayLike(summaryItems) && summaryItems.length === 0) || maxRunsExceeded) &&
             typeof finish === 'function') {
             finish(summaryItems);
         } else {
