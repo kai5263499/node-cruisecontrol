@@ -3,6 +3,7 @@ var backoff = require('backoff');
 var monitor = require("os-monitor");
 var moment  = require('moment');
 var R       = require('ramda');
+var Emitter = require('emitter');
 
 function Cruisecontrol(config) {
     monitor.setMaxListeners(20);
@@ -169,6 +170,8 @@ function Cruisecontrol(config) {
             overloaded = null;
         } else {
             overloaded = moment();
+
+            self.emit('overloaded', event);
         }
     };
     monitor.on('monitor', stateMonitor);
@@ -199,10 +202,12 @@ function Cruisecontrol(config) {
 
     queueBackoff.on('backoff', function(number, delay) {
         backedoff = true;
+        self.emit('backoff', {'number':number, 'delay':delay});
     });
 
     queueBackoff.on('ready', function(number, delay) {
         backedoff = false;
+        self.emit('ready', {'number':number, 'delay':delay});
         next();
     });
 
@@ -213,5 +218,7 @@ function Cruisecontrol(config) {
     this.start         = start;
     this.set           = set;
 }
+
+Emitter(Cruisecontrol.prototype);
 
 module.exports = Cruisecontrol;
