@@ -37,6 +37,7 @@ var getConfig = function() {
         pipeline: [addOne], // Array of functions to perform row-level work
         summary: [avg],     // [Optional] Array of functions to apply in-order to the aggregated output of the pipeline
         finish: null,       // [Optional] Function to call when gather returns an empty set
+        threads: 2,
         threshold: {
             mem: 0.9,       // Percentage of memory which must be free
             cpu: 8          // Load average in the last 5 minutes that the CPU must be under

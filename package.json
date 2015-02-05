@@ -1,6 +1,6 @@
 {
   "name": "cruisecontrol",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "description": "utility for processing a work queue with a backoff triggered by system resources",
   "main": "index.js",
   "scripts": {
@@ -30,6 +30,7 @@
   "dependencies": {
     "backoff": "^2.4.1",
     "bluebird": "^2.6.4",
+    "emitter": "0.0.1",
     "moment": "^2.8.4",
     "os-monitor": "^1.0.1",
     "ramda": "^0.8.0"

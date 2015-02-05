@@ -3,6 +3,7 @@ var backoff = require('backoff');
 var monitor = require("os-monitor");
 var moment  = require('moment');
 var R       = require('ramda');
+var cluster = require('cluster');
 var Emitter = require('emitter');
 
 function Cruisecontrol(config) {
@@ -16,6 +17,12 @@ function Cruisecontrol(config) {
     var overloaded  = null;  // Moment of when the system became overloaded. Otherwise null
     var numRuns     = 0;
     var maxRuns     = R.isEmpty(config.maxRuns) ? -1 : config.maxRuns;
+    var threads     = R.isEmpty(config.threads) ? 1  : config.threads;
+    var workersOnline = 0;
+    var workerPtr   = 0;
+    var workers     = [];
+    var transformed = [];
+    var completed   = 0;
     var finish;
 
     var PASSTHROUGH = Promise.method(function(x) {
@@ -26,9 +33,39 @@ function Cruisecontrol(config) {
                                             }
                                         });
 
+    var handleWorkerMessage = function(msg) {
+        if(msg.type === 'started') {
+            workersOnline++;
+            if(workersOnline === threads) {
+                next();
+            }
+        } else if(msg.type === 'completed') {
+            completed++;
+
+            transformed = transformed.concat(msg.transformed);
+
+            if(completed === workers.length) {
+                if(summary !== null &&
+                   !R.isEmpty(transformed) &&
+                   typeof summary === 'function') {
+                   return summary(transformed)
+                        .then(postProcessItems);
+                } else {
+                    return postProcessItems(transformed);
+                }
+            }
+
+            this.emit('workCompleted', msg);
+        }
+    };
+
     var stop = function(cb) {
             monitor.stop();
             lock = true;
+            numWorkers = workers.length;
+            while(numWorkers--) {
+                workers[numWorkers].kill();
+            }
         };
 
     var ComposePipeline = function() {
@@ -92,9 +129,9 @@ function Cruisecontrol(config) {
         if(overloaded === null) {
             var res = config.gather();
             if(typeof res.then === 'function') {
-                res.then(processItems);
+                return res.then(processItems);
             } else if(R.isArrayLike(res)) {
-                processItems(res);
+                return processItems(res);
             }
         } else {
             lock = false;
@@ -105,23 +142,27 @@ function Cruisecontrol(config) {
         if(items.length > 0) {
             numRuns++;
 
-            Promise.all(R.map(pipeline, items))
-                .then(function(transformed) {
-                    if(summary !== null &&
-                       !R.isEmpty(transformed)) {
-                        summary(transformed)
-                            .then(postProcessItems);
-                    } else {
-                        postProcessItems(items);
-                    }
-                });
+            var numWorkers = workers.length;
+            var blocksize = Math.ceil(items.length/workers.length);
+            completed = 0;
+            transformed = [];
+
+            while(numWorkers--) {
+                var block = items.splice(0,blocksize);
+                workers[workerPtr].send(block);
+
+                workerPtr++;
+                if(workerPtr >= numWorkers) {
+                    workerPtr = 0;
+                }
+            }
         } else {
             lock = false;
             if(!backedoff) {
                 if(config.loop === true) {
                     queueBackoff.backoff();
-                } else {
-                    finish();
+                } else if(typeof finish === 'function') {
+                    return finish();
                 }
             }
         }
@@ -130,10 +171,10 @@ function Cruisecontrol(config) {
         var maxRunsExceeded = (maxRuns !== -1 && numRuns >= maxRuns);
         if(((R.isArrayLike(summaryItems) && summaryItems.length === 0) || maxRunsExceeded) &&
             typeof finish === 'function') {
-            finish(summaryItems);
+            return finish(summaryItems);
         } else {
             lock = false;
-            next();
+            return next();
         }
     };
     var set  = function(key,val) {
@@ -146,18 +187,40 @@ function Cruisecontrol(config) {
             ComposeFinish();
         }
     };
+
     var start= function(force) {
-            monitor.start({
-                delay: ((config.max_delay*1000)/2),
-                immediate: true
+        workerPtr = 0;
+        monitor.start({
+            delay: ((config.max_delay*1000)/2),
+            immediate: true
+        });
+
+        if(force === true) {
+            lock = false;
+        }
+
+        if(cluster.isMaster) {
+            var t = threads;
+            while(t--) {
+                var worker = cluster.fork();
+                worker.on('message', handleWorkerMessage);
+                workers.push(worker);
+            }
+        } else if(cluster.isWorker) {
+            process.on('message', function(items) {
+                Promise.all(R.map(pipeline, items))
+                    .then(function(transformed) {
+                        process.send({
+                            "type":"completed",
+                            "pid":process.pid,
+                            "transformed":transformed
+                        });
+                    });
             });
 
-            if(force === true) {
-                lock = false;
-            }
-
-            next();
-        };
+            process.send({"type":"started"});
+        }
+    };
 
     // This controls whether the global overloaded state variable
     // is set to none or the moment the system became overloaded.
@@ -170,8 +233,7 @@ function Cruisecontrol(config) {
             overloaded = null;
         } else {
             overloaded = moment();
-
-            self.emit('overloaded', event);
+            this.emit('overloaded', event);
         }
     };
     monitor.on('monitor', stateMonitor);
@@ -202,12 +264,12 @@ function Cruisecontrol(config) {
 
     queueBackoff.on('backoff', function(number, delay) {
         backedoff = true;
-        self.emit('backoff', {'number':number, 'delay':delay});
+        this.emit('backoff', {'number':number, 'delay':delay});
     });
 
     queueBackoff.on('ready', function(number, delay) {
         backedoff = false;
-        self.emit('ready', {'number':number, 'delay':delay});
+        this.emit('ready', {'number':number, 'delay':delay});
         next();
     });
 
