@@ -44,6 +44,7 @@ This is a simple [negative feedback closed loop control system](http://en.wikipe
         pipeline: [addOne], // Array of functions to perform row-level work
         summary: [avg],     // [Optional] Array of functions to apply in-order to the aggregated output of the pipeline
         finish: null,       // [Optional] Function to call when gather returns an empty set
+        threads: 1          // [Optional] Number of threads to use to process the workload
         threshold: {
             mem: 0.7,       // Percentage of memory which must be free
             cpu: 2          // Load average in the last 5 minutes that the CPU must be under
