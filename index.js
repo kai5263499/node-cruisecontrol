@@ -48,8 +48,11 @@ function Cruisecontrol(config) {
                 if(summary !== null &&
                    !R.isEmpty(transformed) &&
                    typeof summary === 'function') {
+                   
                    return summary(transformed)
-                        .then(postProcessItems);
+                        .then(function(summaryItems) {
+                            postProcessItems(summaryItems);
+                        });
                 } else {
                     return postProcessItems(transformed);
                 }
@@ -162,7 +165,7 @@ function Cruisecontrol(config) {
                 if(config.loop === true) {
                     queueBackoff.backoff();
                 } else if(typeof finish === 'function') {
-                    return finish();
+                    return finish(items);
                 }
             }
         }
