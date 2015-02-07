@@ -15,7 +15,6 @@ describe('promisified cruisecontrol instance', function () {
     config.gather   = function() {
                         return new Promise(function(resolve,reject) {
                                     resolve([1,1,1,1,1,1,1,1,1,1]);
-                                    
                                 });
                       };
     config.pipeline = [

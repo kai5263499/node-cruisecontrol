@@ -38,11 +38,6 @@ describe('basic cruisecontrol instance', function () {
  });
  it('should backoff when overloaded', function (done) {
     var cruisecontrol = new Cruisecontrol(Common.getConfig());
-    cruisecontrol.set('finish',function() {
-        if(typeof cb == 'function') {
-            cb();
-        }
-    });
     cruisecontrol.setOverloaded(-1);
 
     cruisecontrol.getOverloaded().should.equal(-1);

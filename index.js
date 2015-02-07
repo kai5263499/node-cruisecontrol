@@ -1,3 +1,6 @@
+/*jslint node: true */
+'use strict';
+
 var Promise = require('bluebird');
 var backoff = require('backoff');
 var monitor = require("os-monitor");
@@ -22,16 +25,11 @@ function Cruisecontrol(config) {
     var workerPtr   = 0;
     var workers     = [];
     var transformed = [];
+    var summaries   = [];
     var completed   = 0;
     var finish;
 
-    var PASSTHROUGH = Promise.method(function(x) {
-                                            if(typeof cb == 'function') {
-                                                cb(x);
-                                            } else {
-                                                return x;
-                                            }
-                                        });
+    var PASSTHROUGH = Promise.method(function(x) { return x; });
 
     var handleWorkerMessage = function(msg) {
         if(msg.type === 'started') {
@@ -65,7 +63,7 @@ function Cruisecontrol(config) {
     var stop = function(cb) {
             monitor.stop();
             lock = true;
-            numWorkers = workers.length;
+            var numWorkers = workers.length;
             while(numWorkers--) {
                 workers[numWorkers].kill();
             }
@@ -98,7 +96,9 @@ function Cruisecontrol(config) {
                     summary = Promise.method(R.pPipe(summary,config.summary[s]));
                 }
             } else {
-                summary = Promise.method(config.summary);
+                if(typeof config.summary === 'function') {
+                    summary = Promise.method(config.summary);
+                }
             }
         } else {
             summary = null;
@@ -113,9 +113,9 @@ function Cruisecontrol(config) {
         }
     };
 
-    ComposePipeline();
-    ComposeSummary();
-    ComposeFinish();
+    new ComposePipeline();
+    new ComposeSummary();
+    new ComposeFinish();
 
     var setOverloaded = function(val) {
         overloaded = val;
@@ -144,20 +144,34 @@ function Cruisecontrol(config) {
     var processItems = function(items) {
         if(items.length > 0) {
             numRuns++;
-
             var numWorkers = workers.length;
-            var blocksize = Math.ceil(items.length/workers.length);
-            completed = 0;
-            transformed = [];
+            if(1 < numWorkers) {
+                var blocksize = Math.ceil(items.length/workers.length);
+                
+                completed = 0;
+                transformed = [];
 
-            while(numWorkers--) {
-                var block = items.splice(0,blocksize);
-                workers[workerPtr].send(block);
+                while(numWorkers--) {
+                    var block = items.splice(0,blocksize);
+                    workers[workerPtr].send(block);
 
-                workerPtr++;
-                if(workerPtr >= numWorkers) {
-                    workerPtr = 0;
+                    workerPtr++;
+                    if(workerPtr >= numWorkers) {
+                        workerPtr = 0;
+                    }
                 }
+            } else {
+                Promise.all(R.map(pipeline, items))
+                    .then(function(items) {
+                        if(typeof summary === 'function') {
+                           return summary(items)
+                                .then(function(items) {
+                                    postProcessItems(items);
+                                });
+                        } else {
+                            return postProcessItems(items);
+                        }
+                    });
             }
         } else {
             lock = false;
@@ -165,16 +179,18 @@ function Cruisecontrol(config) {
                 if(config.loop === true) {
                     queueBackoff.backoff();
                 } else if(typeof finish === 'function') {
-                    return finish(items);
+                    summaries = summaries.concat(items);
+                    return finish(summaries);
                 }
             }
         }
     };
-    var postProcessItems = function(summaryItems) {
+    var postProcessItems = function(items) {
+        summaries = summaries.concat(items);
         var maxRunsExceeded = (maxRuns !== -1 && numRuns >= maxRuns);
-        if(((R.isArrayLike(summaryItems) && summaryItems.length === 0) || maxRunsExceeded) &&
+        if(((R.isArrayLike(items) && items.length === 0) || maxRunsExceeded) &&
             typeof finish === 'function') {
-            return finish(summaryItems);
+            return finish(summaries);
         } else {
             lock = false;
             return next();
@@ -183,16 +199,19 @@ function Cruisecontrol(config) {
     var set  = function(key,val) {
         config[key] = val;
         if(key === 'pipeline') {
-            ComposePipeline();
+            new ComposePipeline();
         } else if(key === 'summary') {
-            ComposeSummary();
+            new ComposeSummary();
         } else if(key === 'finish') {
-            ComposeFinish();
+            new ComposeFinish();
         }
     };
 
     var start= function(force) {
         workerPtr = 0;
+        numRuns = 0;
+        summaries = [];
+
         monitor.start({
             delay: ((config.max_delay*1000)/2),
             immediate: true
@@ -202,26 +221,30 @@ function Cruisecontrol(config) {
             lock = false;
         }
 
-        if(cluster.isMaster) {
-            var t = threads;
-            while(t--) {
-                var worker = cluster.fork();
-                worker.on('message', handleWorkerMessage);
-                workers.push(worker);
-            }
-        } else if(cluster.isWorker) {
-            process.on('message', function(items) {
-                Promise.all(R.map(pipeline, items))
-                    .then(function(transformed) {
-                        process.send({
-                            "type":"completed",
-                            "pid":process.pid,
-                            "transformed":transformed
+        if(1 < threads) {
+            if(cluster.isMaster) {
+                var t = threads;
+                while(t--) {
+                    var worker = cluster.fork();
+                    worker.on('message', handleWorkerMessage);
+                    workers.push(worker);
+                }
+            } else if(cluster.isWorker) {
+                process.on('message', function(items) {
+                    Promise.all(R.map(pipeline, items))
+                        .then(function(transformed) {
+                            process.send({
+                                "type":"completed",
+                                "pid":process.pid,
+                                "transformed":transformed
+                            });
                         });
-                    });
-            });
+                });
 
-            process.send({"type":"started"});
+                process.send({"type":"started"});
+            }
+        } else {
+            next();
         }
     };
 
@@ -267,12 +290,12 @@ function Cruisecontrol(config) {
 
     queueBackoff.on('backoff', function(number, delay) {
         backedoff = true;
-        this.emit('backoff', {'number':number, 'delay':delay});
+        this.emit('backedoff', {'number':number, 'delay':delay});
     });
 
     queueBackoff.on('ready', function(number, delay) {
         backedoff = false;
-        this.emit('ready', {'number':number, 'delay':delay});
+        this.emit('backoffended', {'number':number, 'delay':delay});
         next();
     });
 
@@ -284,6 +307,6 @@ function Cruisecontrol(config) {
     this.set           = set;
 }
 
-Emitter(Cruisecontrol.prototype);
+new Emitter(Cruisecontrol.prototype);
 
 module.exports = Cruisecontrol;
