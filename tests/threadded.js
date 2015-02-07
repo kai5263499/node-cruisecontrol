@@ -23,7 +23,6 @@ describe('threadded cruisecontrol instance', function () {
     var cfg      = Common.getConfig();
     cfg.gather   = gather;
     cfg.threads  = 2;
-    // delete cfg.pipeline;
     delete cfg.summary;
     cfg.finish   = function(results) {
         cruisecontrol.getNumRuns().should.equal(10);
