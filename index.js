@@ -290,12 +290,12 @@ function Cruisecontrol(config) {
 
     queueBackoff.on('backoff', function(number, delay) {
         backedoff = true;
-        this.emit('backedoff', {'number':number, 'delay':delay});
+        this.emit('queueBackoff', {'number':number, 'delay':delay});
     });
 
     queueBackoff.on('ready', function(number, delay) {
         backedoff = false;
-        this.emit('backoffended', {'number':number, 'delay':delay});
+        this.emit('queueReady', {'number':number, 'delay':delay});
         next();
     });
 
