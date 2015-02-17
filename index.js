@@ -31,6 +31,22 @@ function Cruisecontrol(config) {
 
     var PASSTHROUGH = Promise.method(function(x) { return x; });
 
+    var handleWorkerDeath = function(worker, code, signal) {
+        console.log('worker %d died (%s). restarting...',worker.process.pid, signal || code);
+        var w_l = workers.length;
+        while(w_l--) {
+            if(workers[w_l].isDead()) {
+                workers.splice(w_l,1);
+            }
+        }
+
+        completed++;
+        var newWorker = cluster.fork();
+        newWorker.on('message', handleWorkerMessage);
+        newWorker.on('exit', handleWorkerDeath);
+        workers.push(newWorker);
+    };
+
     var handleWorkerMessage = function(msg) {
         if(msg.type === 'started') {
             workersOnline++;
@@ -227,6 +243,7 @@ function Cruisecontrol(config) {
                 while(t--) {
                     var worker = cluster.fork();
                     worker.on('message', handleWorkerMessage);
+                    worker.on('exit', handleWorkerDeath);
                     workers.push(worker);
                 }
             } else if(cluster.isWorker) {
