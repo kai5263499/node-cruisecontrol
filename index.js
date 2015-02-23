@@ -32,10 +32,9 @@ function Cruisecontrol(config) {
     var PASSTHROUGH = Promise.method(function(x) { return x; });
 
     var handleWorkerDeath = function(worker, code, signal) {
-        console.log('worker %d died (%s). restarting...',worker.process.pid, signal || code);
         var w_l = workers.length;
         while(w_l--) {
-            if(workers[w_l].isDead()) {
+            if(!workers[w_l] || workers[w_l].isDead !== 'function' || workers[w_l].isDead()) {
                 workers.splice(w_l,1);
             }
         }
